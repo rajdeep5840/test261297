@@ -1,40 +1,67 @@
-name: Release to SIT
+name: Tag to Release Branch
 
 on:
   push:
     tags:
-      - "release-aug-*"
-      - "release-sept-*"
+      - 'release-*'   # e.g., release-2025-08-login-001
+
+permissions:
+  contents: write
 
 jobs:
-  deploy:
+  cherry-pick:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # important so tags and full history are available
 
-      - name: Extract release info
+      - name: Parse tag and resolve commit
+        id: parse
+        shell: bash
         run: |
-          echo "TAG=${GITHUB_REF##*/}" >> $GITHUB_ENV
-          echo "Release triggered by tag: $TAG"
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          echo "TAG=$TAG" >> $GITHUB_ENV
+          SHA=$(git rev-list -n 1 "$TAG")
+          echo "SHA=$SHA" >> $GITHUB_ENV
 
-      - name: Setup Git
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-
-      - name: Merge into Release Branch
-        run: |
-          if [[ "$TAG" == release-aug-* ]]; then
-            BRANCH="release/aug"
-          elif [[ "$TAG" == release-sept-* ]]; then
-            BRANCH="release/sept"
+          # Expect tag like: release-YYYY-MM-featureName
+          if [[ "$TAG" =~ ^release-([0-9]{4})-([0-9]{2})-.*$ ]]; then
+            REL="release/${BASH_REMATCH[1]}-${BASH_REMATCH[2]}"
+            echo "RELEASE_BRANCH=$REL" >> $GITHUB_ENV
+            echo "release_branch=$REL" >> $GITHUB_OUTPUT
           else
-            echo "No release branch matched"
+            echo "❌ Tag must look like release-YYYY-MM-featureName (e.g., release-2025-08-login-001)"
+            exit 1
+          fi
+          echo "Resolved tag $TAG -> $SHA; release branch: $REL"
+
+      - name: Configure Git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create or update release branch and cherry-pick tagged commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin --prune
+
+          if git show-ref --verify --quiet refs/remotes/origin/"$RELEASE_BRANCH"; then
+            echo "✔ Found release branch $RELEASE_BRANCH"
+            git checkout -B "$RELEASE_BRANCH" "origin/$RELEASE_BRANCH"
+          else
+            echo "ℹ️ Creating release branch $RELEASE_BRANCH from origin/dev"
+            git checkout -B "$RELEASE_BRANCH" origin/dev
+          fi
+
+          echo "Cherry-picking $SHA into $RELEASE_BRANCH"
+          if ! git cherry-pick "$SHA"; then
+            echo "❌ Cherry-pick conflict. Aborting and failing the job."
+            git cherry-pick --abort || true
             exit 1
           fi
 
-          git fetch origin
-          git checkout $BRANCH
-          git merge $TAG --no-ff -m "Merging $TAG into $BRANCH"
-          git push origin $BRANCH
+          git push origin "$RELEASE_BRANCH"
+          echo "✅ Pushed $RELEASE_BRANCH with cherry-picked commit from $TAG"
