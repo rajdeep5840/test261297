@@ -58,9 +58,14 @@ jobs:
 
           echo "Cherry-picking $SHA into $RELEASE_BRANCH"
           if ! git cherry-pick "$SHA"; then
-            echo "❌ Cherry-pick conflict. Aborting and failing the job."
-            git cherry-pick --abort || true
-            exit 1
+            if git diff --quiet; then
+              echo "⚠️ Cherry-pick resulted in no changes (already applied). Skipping."
+              git cherry-pick --skip || true
+            else
+              echo "❌ Real conflict encountered. Aborting."
+              git cherry-pick --abort || true
+              exit 1
+            fi
           fi
 
           git push origin "$RELEASE_BRANCH"
