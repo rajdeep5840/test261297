@@ -1,0 +1,40 @@
+name: Release to SIT
+
+on:
+  push:
+    tags:
+      - "release-aug-*"
+      - "release-sept-*"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Extract release info
+        run: |
+          echo "TAG=${GITHUB_REF##*/}" >> $GITHUB_ENV
+          echo "Release triggered by tag: $TAG"
+
+      - name: Setup Git
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+      - name: Merge into Release Branch
+        run: |
+          if [[ "$TAG" == release-aug-* ]]; then
+            BRANCH="release/aug"
+          elif [[ "$TAG" == release-sept-* ]]; then
+            BRANCH="release/sept"
+          else
+            echo "No release branch matched"
+            exit 1
+          fi
+
+          git fetch origin
+          git checkout $BRANCH
+          git merge $TAG --no-ff -m "Merging $TAG into $BRANCH"
+          git push origin $BRANCH
