@@ -10,7 +10,6 @@ TAG_PATTERN="release-2025-08"
 RELEASE_BRANCH="release"
 
 echo "Starting tag analysis for pattern: '$TAG_PATTERN'"
-echo ""
 
 git fetch origin --tags --prune
 git fetch origin --prune
