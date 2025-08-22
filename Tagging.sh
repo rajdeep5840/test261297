@@ -6,8 +6,8 @@ set -e
 #           Then create release branch, merge features, and raise PR to st
 # ----------------------------------------
 
-TAG_PATTERN="release-2025-08"
-RELEASE_BRANCH="release"
+TAG_PATTERN="release_aug_22"
+RELEASE_BRANCH="release/st_all_feature_aug_22"
 
 echo "Starting tag analysis for pattern: '$TAG_PATTERN'"
 echo ""
